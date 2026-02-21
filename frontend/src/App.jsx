@@ -1,54 +1,60 @@
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
-import { AppProvider, useAppContext } from '@/context/AppContext'
-import Stepper from '@/components/Stepper'
-import Upload from '@/pages/Upload'
-import Configure from '@/pages/Configure'
-import Training from '@/pages/Training'
-import Results from '@/pages/Results'
+import { Routes, Route } from 'react-router-dom'
+import Home from './pages/Home.jsx'
+import Regression from './pages/Regression.jsx'
+import Classification from './pages/Classification.jsx'
+import Clustering from './pages/Clustering.jsx'
 
-const STEP_MAP = { '/': 0, '/configure': 1, '/training': 2, '/results': 3 }
-
-function Layout() {
-  const location = useLocation()
-  const step = STEP_MAP[location.pathname] ?? 0
-
+export default function App() {
   return (
-    <div className="min-h-screen" style={{ background: 'hsl(222 84% 5%)' }}>
-      {/* Top bar */}
-      <header className="border-b border-[hsl(var(--border))] px-6 py-4">
-        <div className="max-w-6xl mx-auto flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg gradient-bg border border-[hsl(var(--primary)/0.3)] flex items-center justify-center">
-            <span className="text-sm font-bold gradient-text">A</span>
+    <div className="bg-animated min-h-screen">
+      {/* Header */}
+      <header style={{
+        borderBottom: '1px solid rgba(108, 92, 231, 0.15)',
+        background: 'rgba(10, 10, 26, 0.6)',
+        backdropFilter: 'blur(20px)',
+        position: 'sticky',
+        top: 0,
+        zIndex: 50,
+      }}>
+        <div style={{
+          maxWidth: '1200px',
+          margin: '0 auto',
+          padding: '16px 24px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+        }}>
+          <div style={{
+            width: '36px',
+            height: '36px',
+            borderRadius: '10px',
+            background: 'linear-gradient(135deg, #6c5ce7, #4facfe)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '16px',
+            fontWeight: 'bold',
+          }}>
+            🧠
           </div>
-          <span className="font-semibold text-[hsl(var(--foreground))]">AutoML Studio</span>
-          <span className="ml-1 text-xs px-2 py-0.5 rounded-full bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))]">
-            beta
+          <a href="/" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <span style={{ fontWeight: 700, fontSize: '18px' }} className="gradient-text">
+              ML Model Trainer
+            </span>
+          </a>
+          <span className="badge badge-purple" style={{ marginLeft: '4px' }}>
+            sklearn
           </span>
         </div>
       </header>
 
-      {/* Stepper */}
-      <div className="max-w-6xl mx-auto pt-8 px-6">
-        <Stepper currentStep={step} />
-      </div>
-
-      {/* Page */}
+      {/* Routes */}
       <Routes>
-        <Route path="/" element={<Upload />} />
-        <Route path="/configure" element={<Configure />} />
-        <Route path="/training" element={<Training />} />
-        <Route path="/results" element={<Results />} />
+        <Route path="/" element={<Home />} />
+        <Route path="/regression" element={<Regression />} />
+        <Route path="/classification" element={<Classification />} />
+        <Route path="/clustering" element={<Clustering />} />
       </Routes>
     </div>
-  )
-}
-
-export default function App() {
-  return (
-    <AppProvider>
-      <BrowserRouter>
-        <Layout />
-      </BrowserRouter>
-    </AppProvider>
   )
 }
