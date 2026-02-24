@@ -262,7 +262,7 @@ export default function Classification() {
                         🚀 Start Training
                     </button>
                     <p style={{ color: 'var(--color-text-muted)', fontSize: '13px', marginTop: '12px' }}>
-                        Selected: {availableDatasets.find(d => d.id === selectedDataset)?.name || selectedDataset}
+                        Selected: {availableDatasets?.find(d => d.id === selectedDataset)?.name || selectedDataset}
                     </p>
                 </div>
             )}
