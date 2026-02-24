@@ -5,7 +5,7 @@ import {
     ResponsiveContainer, Legend,
 } from 'recharts'
 
-const API_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
+const API_URL = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/$/, '')
 const CLUSTER_COLORS = ['#6c5ce7', '#4facfe', '#f093fb', '#2ed573', '#ffa502', '#f5576c', '#00d2ff']
 
 // ── EDA ──────────────────────────────────────────────────────────

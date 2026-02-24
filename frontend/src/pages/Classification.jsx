@@ -107,7 +107,7 @@ function EDASection({ eda }) {
 }
 
 
-const API_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
+const API_URL = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/$/, '')
 
 const HEATMAP_COLORS = [
     'rgba(108, 92, 231, 0.05)',
