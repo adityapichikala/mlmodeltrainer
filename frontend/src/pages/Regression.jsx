@@ -2,25 +2,121 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
     ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip,
-    ResponsiveContainer, BarChart, Bar, Cell,
+    ResponsiveContainer, BarChart, Bar, Cell, ReferenceLine,
 } from 'recharts'
 
-const API_URL = 'http://localhost:8000'
+// ── EDA helpers ────────────────────────────────────────────────
+function EDASection({ eda }) {
+    if (!eda) return null
+    return (
+        <div className="glass-card" style={{ padding: '24px', marginBottom: '24px' }}>
+            <div className="section-title">🔍 Exploratory Data Analysis</div>
+
+            {/* Target Distribution */}
+            {eda.target_distribution && (
+                <div style={{ marginBottom: '28px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '10px' }}>
+                        📊 Target Distribution ({eda.target_name || 'Target'})
+                    </div>
+                    <ResponsiveContainer width="100%" height={180}>
+                        <BarChart data={eda.target_distribution} margin={{ top: 4, right: 16, bottom: 32, left: 8 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(79,172,254,0.1)" />
+                            <XAxis dataKey="range" tick={{ fill: '#9090c0', fontSize: 10 }} angle={-30} textAnchor="end" interval={0} />
+                            <YAxis tick={{ fill: '#9090c0', fontSize: 11 }} />
+                            <Tooltip contentStyle={{ background: 'rgba(26,26,58,0.95)', border: '1px solid rgba(79,172,254,0.3)', borderRadius: '8px', color: '#e8e8ff' }} />
+                            <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                                {eda.target_distribution.map((_, i) => (
+                                    <Cell key={i} fill={`hsl(${200 + i * 8}, 75%, ${55 - i * 1}%)`} />
+                                ))}
+                            </Bar>
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
+            )}
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '24px' }}>
+                {/* Feature Stats Table */}
+                {eda.feature_stats && (
+                    <div>
+                        <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '10px' }}>
+                            📋 Feature Statistics
+                        </div>
+                        <div style={{ overflowX: 'auto' }}>
+                            <table className="metrics-table" style={{ fontSize: '12px' }}>
+                                <thead>
+                                    <tr><th>Feature</th><th>Mean</th><th>Std</th><th>Min</th><th>Max</th></tr>
+                                </thead>
+                                <tbody>
+                                    {eda.feature_stats.map(f => (
+                                        <tr key={f.feature}>
+                                            <td style={{ fontWeight: 600, color: 'var(--color-accent-blue)' }}>{f.feature}</td>
+                                            <td>{f.mean}</td><td>{f.std}</td><td>{f.min}</td><td>{f.max}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
+                {/* Feature-Target Correlations */}
+                {eda.correlations && (
+                    <div>
+                        <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '10px' }}>
+                            🔗 Feature–Target Correlation
+                        </div>
+                        <ResponsiveContainer width="100%" height={220}>
+                            <BarChart data={eda.correlations} layout="vertical" margin={{ top: 4, right: 24, bottom: 4, left: 56 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(79,172,254,0.1)" />
+                                <XAxis type="number" domain={[-1, 1]} tick={{ fill: '#9090c0', fontSize: 11 }} />
+                                <YAxis dataKey="feature" type="category" tick={{ fill: '#9090c0', fontSize: 10 }} width={56} />
+                                <Tooltip contentStyle={{ background: 'rgba(26,26,58,0.95)', border: '1px solid rgba(79,172,254,0.3)', borderRadius: '8px', color: '#e8e8ff' }} formatter={v => v.toFixed(4)} />
+                                <ReferenceLine x={0} stroke="rgba(255,255,255,0.2)" />
+                                <Bar dataKey="correlation" radius={[0, 4, 4, 0]}>
+                                    {eda.correlations.map((d, i) => (
+                                        <Cell key={i} fill={d.correlation >= 0 ? '#4facfe' : '#f5576c'} />
+                                    ))}
+                                </Bar>
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                )}
+            </div>
+        </div>
+    )
+}
+
+const API_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
 
 export default function Regression() {
     const navigate = useNavigate()
     const [status, setStatus] = useState('idle') // idle | training | done
     const [data, setData] = useState(null)
     const [visibleLogs, setVisibleLogs] = useState([])
+    const [availableDatasets, setAvailableDatasets] = useState([])
+    const [selectedDataset, setSelectedDataset] = useState('california')
     const logRef = useRef(null)
+
+    useEffect(() => {
+        const fetchDatasets = async () => {
+            try {
+                const res = await fetch(`${API_URL}/api/regression/datasets`)
+                const dsets = await res.json()
+                setAvailableDatasets(dsets)
+            } catch (err) {
+                console.error("Failed to fetch datasets", err)
+            }
+        }
+        fetchDatasets()
+    }, [])
 
     const startTraining = async () => {
         setStatus('training')
-        setVisibleLogs([])
+        setVisibleLogs(['🚀 Initializing training request...'])
         setData(null)
 
         try {
-            const res = await fetch(`${API_URL}/api/regression/train`)
+            const res = await fetch(`${API_URL}/api/regression/train?dataset=${selectedDataset}`)
             const result = await res.json()
             setData(result)
 
@@ -61,26 +157,51 @@ export default function Regression() {
                     <div>
                         <h1 style={{ fontSize: '32px', fontWeight: 800 }} className="gradient-text-blue">Regression</h1>
                         <p style={{ color: 'var(--color-text-secondary)', fontSize: '14px' }}>
-                            California Housing Dataset • Predict median house values
+                            Pick a dataset and predict numerical values
                         </p>
                     </div>
                 </div>
             </div>
 
+            {/* Selector */}
+            {status === 'idle' && (
+                <div className="fade-in" style={{ marginBottom: '32px' }}>
+                    <div className="section-title">📁 Select Dataset</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                        {availableDatasets.map(ds => (
+                            <div
+                                key={ds.id}
+                                className={`glass-card ${selectedDataset === ds.id ? 'dataset-card-active' : ''}`}
+                                style={{
+                                    padding: '16px',
+                                    cursor: 'pointer',
+                                    border: selectedDataset === ds.id ? '1px solid var(--color-accent-blue)' : '1px solid rgba(255,255,255,0.05)',
+                                    transition: 'all 0.2s ease',
+                                    background: selectedDataset === ds.id ? 'rgba(79, 172, 254, 0.1)' : 'rgba(255,255,255,0.02)'
+                                }}
+                                onClick={() => setSelectedDataset(ds.id)}
+                            >
+                                <div style={{ fontSize: '14px', fontWeight: 700, color: selectedDataset === ds.id ? 'var(--color-accent-blue)' : '#fff' }}>{ds.name}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             {/* Start Button */}
             {status === 'idle' && (
-                <div style={{ textAlign: 'center', padding: '48px 0' }} className="fade-in">
+                <div style={{ textAlign: 'center', padding: '16px 0' }} className="fade-in">
                     <button className="btn-primary" onClick={startTraining} style={{ fontSize: '16px', padding: '16px 48px' }}>
                         🚀 Start Training
                     </button>
                     <p style={{ color: 'var(--color-text-muted)', fontSize: '13px', marginTop: '12px' }}>
-                        Trains 4 models: Linear Regression, Decision Tree, Random Forest, Gradient Boosting
+                        Selected: {availableDatasets.find(d => d.id === selectedDataset)?.name || selectedDataset}
                     </p>
                 </div>
             )}
 
             {/* Training Logs */}
-            {visibleLogs.length > 0 && (
+            {(status === 'training' || visibleLogs.length > 0) && (
                 <div className="fade-in" style={{ marginBottom: '32px' }}>
                     <div className="section-title">
                         {status === 'training' && <div className="pulse-dot" />}
@@ -92,6 +213,11 @@ export default function Regression() {
                                 {log}
                             </div>
                         ))}
+                        {status === 'training' && visibleLogs.length === 1 && (
+                            <div className="log-entry" style={{ fontStyle: 'italic', opacity: 0.7 }}>
+                                ⏳ This may take up to 60 seconds for large datasets like California Housing...
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -116,11 +242,14 @@ export default function Regression() {
                                 <div style={{ fontSize: '16px', fontWeight: 700 }}>{data.dataset.features}</div>
                             </div>
                             <div className="metric-card">
-                                <div style={{ color: 'var(--color-text-muted)', fontSize: '12px', marginBottom: '4px' }}>Best Model</div>
-                                <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-accent-blue)' }}>{data.best_model}</div>
+                                <div style={{ color: 'var(--color-text-muted)', fontSize: '12px', marginBottom: '4px' }}>Target Variable</div>
+                                <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-accent-blue)' }}>{data.dataset.target_name || 'Value'}</div>
                             </div>
                         </div>
                     </div>
+
+                    {/* EDA */}
+                    <EDASection eda={data.eda} />
 
                     {/* Metrics Table */}
                     <div className="glass-card" style={{ padding: '24px', marginBottom: '24px' }}>

@@ -5,7 +5,109 @@ import {
     ResponsiveContainer, Cell,
 } from 'recharts'
 
-const API_URL = 'http://localhost:8000'
+// ── helpers ─────────────────────────────────────────────────────
+const CORR_POS = (v) => `rgba(108,92,231,${Math.min(Math.abs(v), 1).toFixed(2)})`
+const CORR_NEG = (v) => `rgba(245,86,108,${Math.min(Math.abs(v), 1).toFixed(2)})`
+
+function EDASection({ eda }) {
+    if (!eda) return null
+    return (
+        <div className="glass-card" style={{ padding: '24px', marginBottom: '24px' }}>
+            <div className="section-title">🔍 Exploratory Data Analysis</div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
+                {/* Class Distribution */}
+                {eda.class_distribution && (
+                    <div>
+                        <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '10px' }}>
+                            📊 Class Distribution
+                        </div>
+                        <ResponsiveContainer width="100%" height={180}>
+                            <BarChart data={eda.class_distribution} margin={{ top: 4, right: 16, bottom: 4, left: 8 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(108,92,231,0.1)" />
+                                <XAxis dataKey="class" tick={{ fill: '#9090c0', fontSize: 12 }} />
+                                <YAxis tick={{ fill: '#9090c0', fontSize: 11 }} />
+                                <Tooltip contentStyle={{ background: 'rgba(26,26,58,0.95)', border: '1px solid rgba(108,92,231,0.3)', borderRadius: '8px', color: '#e8e8ff' }} />
+                                <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                                    {eda.class_distribution.map((_, i) => (
+                                        <Cell key={i} fill={['#6c5ce7', '#4facfe', '#f093fb'][i % 3]} />
+                                    ))}
+                                </Bar>
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                )}
+
+                {/* Feature Stats Table */}
+                {eda.feature_stats && (
+                    <div>
+                        <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '10px' }}>
+                            📋 Feature Statistics
+                        </div>
+                        <div style={{ overflowX: 'auto' }}>
+                            <table className="metrics-table" style={{ fontSize: '12px' }}>
+                                <thead>
+                                    <tr><th>Feature</th><th>Mean</th><th>Std</th><th>Min</th><th>Max</th></tr>
+                                </thead>
+                                <tbody>
+                                    {eda.feature_stats.map(f => (
+                                        <tr key={f.feature}>
+                                            <td style={{ fontWeight: 600, color: 'var(--color-accent-purple)', fontSize: '11px' }}>{f.feature}</td>
+                                            <td>{f.mean}</td><td>{f.std}</td><td>{f.min}</td><td>{f.max}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
+                {/* Correlation Heatmap */}
+                {eda.correlation && (
+                    <div>
+                        <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '10px' }}>
+                            🔗 Feature Correlation Matrix
+                        </div>
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: `64px repeat(${eda.correlation.labels.length}, 1fr)`,
+                            gap: '3px',
+                            fontSize: '10px',
+                        }}>
+                            <div />
+                            {eda.correlation.labels.map(l => (
+                                <div key={l} style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '4px 2px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={l}>
+                                    {l.split(' ')[0]}
+                                </div>
+                            ))}
+                            {eda.correlation.matrix.map((row, ri) => (
+                                <>
+                                    <div key={`l-${ri}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', color: 'var(--color-text-muted)', paddingRight: '6px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={eda.correlation.labels[ri]}>
+                                        {eda.correlation.labels[ri].split(' ')[0]}
+                                    </div>
+                                    {row.map((val, ci) => (
+                                        <div key={`${ri}-${ci}`} style={{
+                                            background: val >= 0 ? CORR_POS(val) : CORR_NEG(val),
+                                            borderRadius: '4px', padding: '6px 2px',
+                                            textAlign: 'center', fontWeight: 700,
+                                            color: Math.abs(val) > 0.5 ? '#fff' : 'var(--color-text-secondary)',
+                                            border: ri === ci ? '1px solid rgba(255,255,255,0.2)' : 'none',
+                                        }}>
+                                            {val.toFixed(2)}
+                                        </div>
+                                    ))}
+                                </>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    )
+}
+
+
+const API_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
 
 const HEATMAP_COLORS = [
     'rgba(108, 92, 231, 0.05)',
@@ -29,15 +131,30 @@ export default function Classification() {
     const [status, setStatus] = useState('idle')
     const [data, setData] = useState(null)
     const [visibleLogs, setVisibleLogs] = useState([])
+    const [availableDatasets, setAvailableDatasets] = useState([])
+    const [selectedDataset, setSelectedDataset] = useState('iris')
     const logRef = useRef(null)
+
+    useEffect(() => {
+        const fetchDatasets = async () => {
+            try {
+                const res = await fetch(`${API_URL}/api/classification/datasets`)
+                const dsets = await res.json()
+                setAvailableDatasets(dsets)
+            } catch (err) {
+                console.error("Failed to fetch datasets", err)
+            }
+        }
+        fetchDatasets()
+    }, [])
 
     const startTraining = async () => {
         setStatus('training')
-        setVisibleLogs([])
+        setVisibleLogs(['🚀 Initializing training request...'])
         setData(null)
 
         try {
-            const res = await fetch(`${API_URL}/api/classification/train`)
+            const res = await fetch(`${API_URL}/api/classification/train?dataset=${selectedDataset}`)
             const result = await res.json()
             setData(result)
 
@@ -72,28 +189,54 @@ export default function Classification() {
                         width: '48px', height: '48px', borderRadius: '12px',
                         background: 'linear-gradient(135deg, #6c5ce7, #a29bfe)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px',
-                    }}>🏷️</div>
+                    }}>🎯</div>
                     <div>
                         <h1 style={{ fontSize: '32px', fontWeight: 800 }} className="gradient-text-purple">Classification</h1>
                         <p style={{ color: 'var(--color-text-secondary)', fontSize: '14px' }}>
-                            Iris Dataset • Classify flowers into 3 species
+                            Pick a dataset to classify samples into categories
                         </p>
                     </div>
                 </div>
             </div>
 
+            {/* Selector */}
             {status === 'idle' && (
-                <div style={{ textAlign: 'center', padding: '48px 0' }} className="fade-in">
+                <div className="fade-in" style={{ marginBottom: '32px' }}>
+                    <div className="section-title">📁 Select Dataset</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
+                        {availableDatasets.map(ds => (
+                            <div
+                                key={ds.id}
+                                className={`glass-card ${selectedDataset === ds.id ? 'dataset-card-active' : ''}`}
+                                style={{
+                                    padding: '16px',
+                                    cursor: 'pointer',
+                                    border: selectedDataset === ds.id ? '1px solid var(--color-accent-purple)' : '1px solid rgba(255,255,255,0.05)',
+                                    transition: 'all 0.2s ease',
+                                    background: selectedDataset === ds.id ? 'rgba(108, 92, 231, 0.1)' : 'rgba(255,255,255,0.02)'
+                                }}
+                                onClick={() => setSelectedDataset(ds.id)}
+                            >
+                                <div style={{ fontSize: '14px', fontWeight: 700, color: selectedDataset === ds.id ? 'var(--color-accent-purple)' : '#fff' }}>{ds.name}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {status === 'idle' && (
+                <div style={{ textAlign: 'center', padding: '16px 0' }} className="fade-in">
                     <button className="btn-primary" onClick={startTraining} style={{ fontSize: '16px', padding: '16px 48px' }}>
                         🚀 Start Training
                     </button>
                     <p style={{ color: 'var(--color-text-muted)', fontSize: '13px', marginTop: '12px' }}>
-                        Trains 6 models: Logistic Regression, Decision Tree, Random Forest, SVM, KNN, Gradient Boosting
+                        Selected: {availableDatasets.find(d => d.id === selectedDataset)?.name || selectedDataset}
                     </p>
                 </div>
             )}
 
-            {visibleLogs.length > 0 && (
+            {/* Training Logs */}
+            {(status === 'training' || visibleLogs.length > 0) && (
                 <div className="fade-in" style={{ marginBottom: '32px' }}>
                     <div className="section-title">
                         {status === 'training' && <div className="pulse-dot" />}
@@ -135,6 +278,9 @@ export default function Classification() {
                             </div>
                         </div>
                     </div>
+
+                    {/* EDA */}
+                    <EDASection eda={data.eda} />
 
                     {/* Model Comparison Table */}
                     <div className="glass-card" style={{ padding: '24px', marginBottom: '24px' }}>

@@ -7,7 +7,7 @@ Returns step-by-step logs, per-model metrics, and 2D PCA scatter data.
 import time
 import numpy as np
 import pandas as pd
-from sklearn.datasets import load_iris
+from sklearn.datasets import load_iris, load_wine, load_breast_cancer, make_blobs
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans, AgglomerativeClustering, DBSCAN
@@ -18,20 +18,53 @@ from sklearn.metrics import (
 )
 
 
-def run_clustering():
+CLUSTERING_DATASETS = {
+    "iris": {
+        "name": "Iris Dataset",
+        "loader": lambda: (load_iris().data, load_iris().target, list(load_iris().target_names), load_iris().feature_names, load_iris().DESCR),
+        "is_artificial": False,
+    },
+    "wine": {
+        "name": "Wine Dataset",
+        "loader": lambda: (load_wine().data, load_wine().target, list(load_wine().target_names), load_wine().feature_names, load_wine().DESCR),
+        "is_artificial": False,
+    },
+    "breast_cancer": {
+        "name": "Breast Cancer",
+        "loader": lambda: (load_breast_cancer().data, load_breast_cancer().target, list(load_breast_cancer().target_names), load_breast_cancer().feature_names, load_breast_cancer().DESCR),
+        "is_artificial": False,
+    },
+    "blobs": {
+        "name": "Gaussian Blobs",
+        "loader": lambda: (
+            *make_blobs(n_samples=200, centers=4, n_features=4, random_state=42),
+            ["Cluster A", "Cluster B", "Cluster C", "Cluster D"],
+            ["Feature 1", "Feature 2", "Feature 3", "Feature 4"],
+            "Artificial dataset generated with Gaussian blobs."
+        ),
+        "is_artificial": True,
+    },
+}
+
+
+def run_clustering(dataset_name="iris"):
     logs = []
 
     def log(msg):
         logs.append(msg)
 
     # 1. Load dataset
-    log("📂 Loading Iris dataset (unsupervised mode)...")
-    iris = load_iris()
-    df = pd.DataFrame(iris.data, columns=iris.feature_names)
-    true_labels = iris.target  # We'll use these only for comparison, not training
+    if dataset_name not in CLUSTERING_DATASETS:
+        dataset_name = "iris"
 
-    log(f"✅ Loaded {len(df)} samples with {len(iris.feature_names)} features")
-    log(f"📋 Features: {', '.join(iris.feature_names)}")
+    config = CLUSTERING_DATASETS[dataset_name]
+    log(f"📂 Loading {config['name']}...")
+    X_raw, true_labels, target_names, feature_names, descr = config["loader"]()
+
+    df = pd.DataFrame(X_raw, columns=feature_names)
+
+    log(f"✅ Loaded {len(df)} samples with {len(feature_names)} features")
+    log(f"📋 Features: {', '.join(feature_names)}")
     log("🔒 Labels hidden — treating as unsupervised problem")
 
     # 2. Scale features
@@ -115,7 +148,7 @@ def run_clustering():
             "x": round(float(X_2d[i, 0]), 3),
             "y": round(float(X_2d[i, 1]), 3),
             "cluster": int(best_model_labels[i]),
-            "true_label": iris.target_names[true_labels[i]],
+            "true_label": target_names[true_labels[i]],
         }
         for i in range(len(X_2d))
     ]
@@ -126,19 +159,22 @@ def run_clustering():
             "x": round(float(X_2d[i, 0]), 3),
             "y": round(float(X_2d[i, 1]), 3),
             "cluster": int(true_labels[i]),
-            "label": iris.target_names[true_labels[i]],
+            "label": target_names[true_labels[i]],
         }
         for i in range(len(X_2d))
     ]
 
     log("📊 Training complete! Results ready.")
 
+    # 7. EDA
+    eda = _compute_eda_clustering(df, feature_names)
+
     return {
         "dataset": {
-            "name": "Iris (Unsupervised)",
+            "name": config["name"],
             "samples": len(df),
-            "features": len(iris.feature_names),
-            "description": "Clustering applied to Iris dataset without using labels. PCA used for 2D visualization.",
+            "features": len(feature_names),
+            "description": descr[:300],
         },
         "logs": logs,
         "metrics": results,
@@ -149,4 +185,31 @@ def run_clustering():
             "pc1": round(float(explained[0]), 4),
             "pc2": round(float(explained[1]), 4),
         },
+        "eda": eda,
+    }
+
+
+def _compute_eda_clustering(df, feature_names):
+    """Compute EDA stats for Iris (clustering mode)."""
+    feature_stats = []
+    for col in feature_names:
+        s = df[col]
+        feature_stats.append({
+            "feature": col,
+            "mean": round(float(s.mean()), 4),
+            "std": round(float(s.std()), 4),
+            "min": round(float(s.min()), 4),
+            "max": round(float(s.max()), 4),
+        })
+
+    # Feature correlation matrix
+    corr = df[list(feature_names)].corr().round(3)
+    correlation = {
+        "labels": list(feature_names),
+        "matrix": corr.values.tolist(),
+    }
+
+    return {
+        "feature_stats": feature_stats,
+        "correlation": correlation,
     }

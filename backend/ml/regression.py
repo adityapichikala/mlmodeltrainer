@@ -7,7 +7,7 @@ Returns step-by-step logs, per-model metrics, and chart data.
 import time
 import numpy as np
 import pandas as pd
-from sklearn.datasets import fetch_california_housing
+from sklearn.datasets import fetch_california_housing, load_diabetes, load_linnerud
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LinearRegression
@@ -16,25 +16,55 @@ from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
 
-def run_regression():
+REGRESSION_DATASETS = {
+    "california": {
+        "name": "California Housing",
+        "loader": fetch_california_housing,
+        "target_name": "Median house value (in $100k)",
+    },
+    "diabetes": {
+        "name": "Diabetes Dataset",
+        "loader": load_diabetes,
+        "target_name": "Disease progression measure",
+    },
+    "linnerud": {
+        "name": "Linnerud Dataset",
+        "loader": load_linnerud,
+        "target_name": "Weight/Waist/Pulse (First Target)",
+    },
+}
+
+
+def run_regression(dataset_name="california"):
     logs = []
 
     def log(msg):
         logs.append(msg)
 
     # 1. Load dataset
-    log("📂 Loading California Housing dataset...")
-    housing = fetch_california_housing()
-    df = pd.DataFrame(housing.data, columns=housing.feature_names)
-    df["target"] = housing.target
+    if dataset_name not in REGRESSION_DATASETS:
+        dataset_name = "california"
 
-    log(f"✅ Loaded {len(df):,} samples with {len(housing.feature_names)} features")
-    log(f"📋 Features: {', '.join(housing.feature_names)}")
-    log(f"🎯 Target: Median house value (in $100k)")
+    config = REGRESSION_DATASETS[dataset_name]
+    log(f"📂 Loading {config['name']}...")
+    raw_data = config["loader"]()
+
+    # Handle multi-target datasets like Linnerud (just take first target)
+    if len(raw_data.target.shape) > 1:
+        target_vals = raw_data.target[:, 0]
+    else:
+        target_vals = raw_data.target
+
+    df = pd.DataFrame(raw_data.data, columns=raw_data.feature_names)
+    df["target"] = target_vals
+
+    log(f"✅ Loaded {len(df):,} samples with {len(raw_data.feature_names)} features")
+    log(f"📋 Features: {', '.join(raw_data.feature_names)}")
+    log(f"🎯 Target: {config['target_name']}")
 
     # 2. Split data
     log("✂️  Splitting data into 80% train / 20% test...")
-    X = df[housing.feature_names]
+    X = df[raw_data.feature_names]
     y = df["target"]
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
@@ -97,22 +127,62 @@ def run_regression():
     ]
 
     # 6. Feature importance from best model
-    feature_importance = _get_feature_importance(best_model, housing.feature_names)
+    feature_importance = _get_feature_importance(best_model, raw_data.feature_names)
 
     log("📊 Training complete! Results ready.")
 
+    # 7. EDA
+    eda = _compute_eda_regression(df, raw_data.feature_names)
+
     return {
         "dataset": {
-            "name": "California Housing",
+            "name": config["name"],
+            "target_name": config["target_name"],
             "samples": len(df),
-            "features": len(housing.feature_names),
-            "description": housing.DESCR[:300],
+            "features": len(raw_data.feature_names),
+            "description": raw_data.get("DESCR", "")[:300],
         },
         "logs": logs,
         "metrics": results,
         "best_model": best_name,
         "chart_data": chart_data,
         "feature_importance": feature_importance,
+        "eda": eda,
+    }
+
+
+def _compute_eda_regression(df, feature_names):
+    """Compute EDA stats for California Housing dataset."""
+    feature_stats = []
+    for col in feature_names:
+        s = df[col]
+        feature_stats.append({
+            "feature": col,
+            "mean": round(float(s.mean()), 4),
+            "std": round(float(s.std()), 4),
+            "min": round(float(s.min()), 4),
+            "max": round(float(s.max()), 4),
+        })
+
+    # Target distribution: bucket into 10 bins
+    target = df["target"]
+    counts, edges = np.histogram(target, bins=10)
+    target_dist = [
+        {"range": f"{edges[i]:.1f}–{edges[i+1]:.1f}", "count": int(counts[i])}
+        for i in range(len(counts))
+    ]
+
+    # Feature-target correlations
+    correlations = [
+        {"feature": col, "correlation": round(float(df[col].corr(target)), 4)}
+        for col in feature_names
+    ]
+    correlations.sort(key=lambda x: abs(x["correlation"]), reverse=True)
+
+    return {
+        "feature_stats": feature_stats,
+        "target_distribution": target_dist,
+        "correlations": correlations,
     }
 
 

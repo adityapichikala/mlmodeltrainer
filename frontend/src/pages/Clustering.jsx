@@ -5,9 +5,88 @@ import {
     ResponsiveContainer, Legend,
 } from 'recharts'
 
-const API_URL = 'http://localhost:8000'
-
+const API_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
 const CLUSTER_COLORS = ['#6c5ce7', '#4facfe', '#f093fb', '#2ed573', '#ffa502', '#f5576c', '#00d2ff']
+
+// ── EDA ──────────────────────────────────────────────────────────
+const CORR_POS = (v) => `rgba(240,147,251,${Math.min(Math.abs(v), 1).toFixed(2)})`
+const CORR_NEG = (v) => `rgba(245,86,108,${Math.min(Math.abs(v), 1).toFixed(2)})`
+
+function EDASection({ eda }) {
+    if (!eda) return null
+    return (
+        <div className="glass-card" style={{ padding: '24px', marginBottom: '24px' }}>
+            <div className="section-title">🔍 Exploratory Data Analysis</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
+
+                {/* Feature Stats Table */}
+                {eda.feature_stats && (
+                    <div>
+                        <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '10px' }}>
+                            📋 Feature Statistics
+                        </div>
+                        <div style={{ overflowX: 'auto' }}>
+                            <table className="metrics-table" style={{ fontSize: '12px' }}>
+                                <thead>
+                                    <tr><th>Feature</th><th>Mean</th><th>Std</th><th>Min</th><th>Max</th></tr>
+                                </thead>
+                                <tbody>
+                                    {eda.feature_stats.map(f => (
+                                        <tr key={f.feature}>
+                                            <td style={{ fontWeight: 600, color: 'var(--color-accent-pink)', fontSize: '11px' }}>{f.feature}</td>
+                                            <td>{f.mean}</td><td>{f.std}</td><td>{f.min}</td><td>{f.max}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
+                {/* Correlation Heatmap */}
+                {eda.correlation && (
+                    <div>
+                        <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '10px' }}>
+                            🔗 Feature Correlation Matrix
+                        </div>
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: `64px repeat(${eda.correlation.labels.length}, 1fr)`,
+                            gap: '3px',
+                            fontSize: '10px',
+                        }}>
+                            <div />
+                            {eda.correlation.labels.map(l => (
+                                <div key={l} style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '4px 2px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={l}>
+                                    {l.split(' ')[0]}
+                                </div>
+                            ))}
+                            {eda.correlation.matrix.map((row, ri) => (
+                                <>
+                                    <div key={`l-${ri}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', color: 'var(--color-text-muted)', paddingRight: '6px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={eda.correlation.labels[ri]}>
+                                        {eda.correlation.labels[ri].split(' ')[0]}
+                                    </div>
+                                    {row.map((val, ci) => (
+                                        <div key={`${ri}-${ci}`} style={{
+                                            background: val >= 0 ? CORR_POS(val) : CORR_NEG(val),
+                                            borderRadius: '4px', padding: '6px 2px',
+                                            textAlign: 'center', fontWeight: 700,
+                                            color: Math.abs(val) > 0.5 ? '#fff' : 'var(--color-text-secondary)',
+                                            border: ri === ci ? '1px solid rgba(255,255,255,0.2)' : 'none',
+                                        }}>
+                                            {val.toFixed(2)}
+                                        </div>
+                                    ))}
+                                </>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    )
+}
+
 
 export default function Clustering() {
     const navigate = useNavigate()
@@ -15,15 +94,30 @@ export default function Clustering() {
     const [data, setData] = useState(null)
     const [visibleLogs, setVisibleLogs] = useState([])
     const [showTrue, setShowTrue] = useState(false)
+    const [availableDatasets, setAvailableDatasets] = useState([])
+    const [selectedDataset, setSelectedDataset] = useState('iris')
     const logRef = useRef(null)
+
+    useEffect(() => {
+        const fetchDatasets = async () => {
+            try {
+                const res = await fetch(`${API_URL}/api/clustering/datasets`)
+                const dsets = await res.json()
+                setAvailableDatasets(dsets)
+            } catch (err) {
+                console.error("Failed to fetch datasets", err)
+            }
+        }
+        fetchDatasets()
+    }, [])
 
     const startTraining = async () => {
         setStatus('training')
-        setVisibleLogs([])
+        setVisibleLogs(['🚀 Initializing training request...'])
         setData(null)
 
         try {
-            const res = await fetch(`${API_URL}/api/clustering/train`)
+            const res = await fetch(`${API_URL}/api/clustering/train?dataset=${selectedDataset}`)
             const result = await res.json()
             setData(result)
 
@@ -75,24 +169,51 @@ export default function Clustering() {
                     <div>
                         <h1 style={{ fontSize: '32px', fontWeight: 800 }} className="gradient-text-pink">Clustering</h1>
                         <p style={{ color: 'var(--color-text-secondary)', fontSize: '14px' }}>
-                            Iris Dataset (Unlabeled) • Discover hidden patterns
+                            Pick a dataset to find natural groupings in data
                         </p>
                     </div>
                 </div>
             </div>
 
+            {/* Selector */}
             {status === 'idle' && (
-                <div style={{ textAlign: 'center', padding: '48px 0' }} className="fade-in">
+                <div className="fade-in" style={{ marginBottom: '32px' }}>
+                    <div className="section-title">📁 Select Dataset</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
+                        {availableDatasets.map(ds => (
+                            <div
+                                key={ds.id}
+                                className={`glass-card ${selectedDataset === ds.id ? 'dataset-card-active' : ''}`}
+                                style={{
+                                    padding: '16px',
+                                    cursor: 'pointer',
+                                    border: selectedDataset === ds.id ? '1px solid var(--color-accent-pink)' : '1px solid rgba(255,255,255,0.05)',
+                                    transition: 'all 0.2s ease',
+                                    background: selectedDataset === ds.id ? 'rgba(240, 147, 251, 0.1)' : 'rgba(255,255,255,0.02)'
+                                }}
+                                onClick={() => setSelectedDataset(ds.id)}
+                            >
+                                <div style={{ fontSize: '14px', fontWeight: 700, color: selectedDataset === ds.id ? 'var(--color-accent-pink)' : '#fff' }}>{ds.name}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Start Button */}
+            {status === 'idle' && (
+                <div style={{ textAlign: 'center', padding: '16px 0' }} className="fade-in">
                     <button className="btn-primary" onClick={startTraining} style={{ fontSize: '16px', padding: '16px 48px' }}>
                         🚀 Start Training
                     </button>
                     <p style={{ color: 'var(--color-text-muted)', fontSize: '13px', marginTop: '12px' }}>
-                        Trains 4 models: KMeans (k=3), KMeans (k=4), Agglomerative, DBSCAN
+                        Selected: {availableDatasets.find(d => d.id === selectedDataset)?.name || selectedDataset}
                     </p>
                 </div>
             )}
 
-            {visibleLogs.length > 0 && (
+            {/* Training Logs */}
+            {(status === 'training' || visibleLogs.length > 0) && (
                 <div className="fade-in" style={{ marginBottom: '32px' }}>
                     <div className="section-title">
                         {status === 'training' && <div className="pulse-dot" />}
@@ -130,6 +251,9 @@ export default function Clustering() {
                             </div>
                         </div>
                     </div>
+
+                    {/* EDA */}
+                    <EDASection eda={data.eda} />
 
                     {/* Metrics Table */}
                     <div className="glass-card" style={{ padding: '24px', marginBottom: '24px' }}>

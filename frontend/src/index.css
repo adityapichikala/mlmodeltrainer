@@ -74,6 +74,12 @@ body {
   box-shadow: 0 20px 60px rgba(108, 92, 231, 0.15);
 }
 
+.dataset-card-active {
+  border-color: var(--color-accent-purple) !important;
+  background: rgba(108, 92, 231, 0.15) !important;
+  box-shadow: 0 0 20px rgba(108, 92, 231, 0.2);
+}
+
 /* Gradient text */
 .gradient-text {
   background: linear-gradient(135deg, #4facfe 0%, #6c5ce7 50%, #f093fb 100%);
