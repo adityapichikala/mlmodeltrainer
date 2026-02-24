@@ -93,18 +93,23 @@ export default function Regression() {
     const [status, setStatus] = useState('idle') // idle | training | done
     const [data, setData] = useState(null)
     const [visibleLogs, setVisibleLogs] = useState([])
-    const [availableDatasets, setAvailableDatasets] = useState([])
+    const [availableDatasets, setAvailableDatasets] = useState(null)
     const [selectedDataset, setSelectedDataset] = useState('california')
+    const [fetchError, setFetchError] = useState(null)
     const logRef = useRef(null)
 
     useEffect(() => {
         const fetchDatasets = async () => {
             try {
                 const res = await fetch(`${API_URL}/api/regression/datasets`)
+                if (!res.ok) throw new Error(`Server returned ${res.status}`)
                 const dsets = await res.json()
                 setAvailableDatasets(dsets)
+                setFetchError(null)
             } catch (err) {
                 console.error("Failed to fetch datasets", err)
+                setFetchError(err.message)
+                setAvailableDatasets([])
             }
         }
         fetchDatasets()
@@ -167,24 +172,51 @@ export default function Regression() {
             {status === 'idle' && (
                 <div className="fade-in" style={{ marginBottom: '32px' }}>
                     <div className="section-title">📁 Select Dataset</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-                        {availableDatasets.map(ds => (
-                            <div
-                                key={ds.id}
-                                className={`glass-card ${selectedDataset === ds.id ? 'dataset-card-active' : ''}`}
-                                style={{
-                                    padding: '16px',
-                                    cursor: 'pointer',
-                                    border: selectedDataset === ds.id ? '1px solid var(--color-accent-blue)' : '1px solid rgba(255,255,255,0.05)',
-                                    transition: 'all 0.2s ease',
-                                    background: selectedDataset === ds.id ? 'rgba(79, 172, 254, 0.1)' : 'rgba(255,255,255,0.02)'
-                                }}
-                                onClick={() => setSelectedDataset(ds.id)}
-                            >
-                                <div style={{ fontSize: '14px', fontWeight: 700, color: selectedDataset === ds.id ? 'var(--color-accent-blue)' : '#fff' }}>{ds.name}</div>
-                            </div>
-                        ))}
-                    </div>
+
+                    {availableDatasets === null && (
+                        <div style={{ color: 'var(--color-text-muted)', fontSize: '14px', padding: '20px', textAlign: 'center' }}>
+                            <div className="pulse-dot" style={{ display: 'inline-block', marginRight: '8px' }} />
+                            Connecting to backend...
+                        </div>
+                    )}
+
+                    {fetchError && (
+                        <div style={{
+                            background: 'rgba(255, 71, 87, 0.1)',
+                            border: '1px solid rgba(255, 71, 87, 0.2)',
+                            borderRadius: '12px',
+                            padding: '16px',
+                            color: '#ff4757',
+                            fontSize: '14px',
+                            marginBottom: '16px'
+                        }}>
+                            <strong>Connection Error:</strong> {fetchError}<br />
+                            <span style={{ fontSize: '12px', opacity: 0.8 }}>
+                                Ensure the backend is running and `VITE_API_BASE_URL` is set correctly.
+                            </span>
+                        </div>
+                    )}
+
+                    {availableDatasets && availableDatasets.length > 0 && (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                            {availableDatasets.map(ds => (
+                                <div
+                                    key={ds.id}
+                                    className={`glass-card ${selectedDataset === ds.id ? 'dataset-card-active' : ''}`}
+                                    style={{
+                                        padding: '16px',
+                                        cursor: 'pointer',
+                                        border: selectedDataset === ds.id ? '1px solid var(--color-accent-blue)' : '1px solid rgba(255,255,255,0.05)',
+                                        transition: 'all 0.2s ease',
+                                        background: selectedDataset === ds.id ? 'rgba(79, 172, 254, 0.1)' : 'rgba(255,255,255,0.02)'
+                                    }}
+                                    onClick={() => setSelectedDataset(ds.id)}
+                                >
+                                    <div style={{ fontSize: '14px', fontWeight: 700, color: selectedDataset === ds.id ? 'var(--color-accent-blue)' : '#fff' }}>{ds.name}</div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             )}
 
